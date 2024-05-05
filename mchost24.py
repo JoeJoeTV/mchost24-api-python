@@ -37,23 +37,24 @@ def api_request(method: str, endpoint: str, json=None, auth=None, **kwargs):
     return response
 
 class HTTPTokenAuth(requests.auth.AuthBase):
-    def __init__(self, token):
+    def __init__(self, token: str):
         self.token = token
 
-    def __eq__(self, other):
+    def __eq__(self, other: object):
         return self.token == getattr(other, 'token', None)
 
-    def __ne__(self, other):
+    def __ne__(self, other: object):
         return not self == other
 
     def __call__(self, r):
         r.headers['Authorization'] = self.token
         return r
 
+
 class MCHost24APIError(Exception):
     """Parent Class for all error specific to the MC-Host24 API"""
     
-    def __init__(self, message, endpoint=None):
+    def __init__(self, message: str = None, endpoint: str = None):
         self.endpoint = endpoint
         
         if message is None:
@@ -66,8 +67,26 @@ class MCHost24APIError(Exception):
         else:
             super().__init__(message)
 
-class NotAuthenticatedError(MCHost24APIError):
+class MCH24UnauthorizedError(MCHost24APIError):
     """Client is not authenticated to talk to the API"""
+
+class MCH24LoginFailedError(MCHost24APIError):
+    """Login to API failed"""
+
+class MCH24UnknownEndpointError(MCHost24APIError):
+    """Tried to access unknown API endpoint"""
+    
+    def __init__(self, endpoint: str):
+        self.endpoint = endpoint
+        super().__init__(f"Tried to access unknown API endpoint: {endpoint}", None)
+
+class MCH24UnsupportedRequestMethodError(MCHost24APIError):
+    """Tried to access endpoint with unsupported request method"""
+    
+    def __init__(self, endpoint: str, request_method: str):
+        self.endpoint = endpoint
+        super().__init__(f"Tried to access endpoint with unsupported request method: {request_method}", endpoint)
+
 
 class APIResponseStatus(Enum):
     """ Enum representing the status of an API response """
@@ -108,13 +127,15 @@ class APIResponse:
 #
 
 class MCHost24API:
-    def __init__(self, token=None):
+    def __init__(self, token: str = None):
         if token:
-            self.auth = HTTPBearerAuth
+            self.auth = HTTPTokenAuth(token)
+        else:
+            self.auth = None
     
     def set_token(self, token: str):
         """ Set API token """
-        self.auth = HTTPBearerAuth(token)
+        self.auth = HTTPTokenAuth(token)
     
     def get_token(self, username: str, password: str, tfa: int = None):
         """ Gets an API token from the API using a user's credentials """
