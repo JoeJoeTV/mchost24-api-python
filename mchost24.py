@@ -36,7 +36,7 @@ def api_request(method: str, endpoint: str, json=None, auth=None, **kwargs):
     logging.debug(pprint.pformat(response.json(), compact=True).replace("'",'"'))
     return response
 
-class HTTPBearerAuth(requests.auth.AuthBase):
+class HTTPTokenAuth(requests.auth.AuthBase):
     def __init__(self, token):
         self.token = token
 
@@ -47,7 +47,7 @@ class HTTPBearerAuth(requests.auth.AuthBase):
         return not self == other
 
     def __call__(self, r):
-        r.headers['Authorization'] = 'Bearer ' + self.token
+        r.headers['Authorization'] = self.token
         return r
 
 class MCHost24APIError(Exception):
@@ -108,8 +108,9 @@ class APIResponse:
 #
 
 class MCHost24API:
-    def __init__(self):
-        self.auth = None
+    def __init__(self, token=None):
+        if token:
+            self.auth = HTTPBearerAuth
     
     def set_token(self, token: str):
         """ Set API token """
