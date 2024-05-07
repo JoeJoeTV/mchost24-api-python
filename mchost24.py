@@ -162,9 +162,11 @@ class MCHost24API:
         endpoint = "/token"
         payload = {
             "username": username,
-            "password": password,
-            "tfa": tfa
+            "password": password
         }
+
+        if tfa is not None:
+            payload["tfa"] = tfa
         
         # Try to perform request and decode JSON response. Don't yet work on the JSON response.
         try:
@@ -209,5 +211,8 @@ class MCHost24API:
                 
                 response["messages"] = messages
                 response["message"] = response["messages"][0] if len(response["messages"]) > 0 else ""
+            else:
+                response["messages"] = []
+                response["message"] = ""
             
             return APIResponse.from_dict(response)
