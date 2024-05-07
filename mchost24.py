@@ -209,7 +209,7 @@ class MCHost24API:
         """
         self.auth = HTTPTokenAuth(token)
     
-    def get_token(self, username: str, password: str, tfa: int = None) -> str:
+    def get_token(self, username: str, password: str, tfa: int = None) -> dict:
         """Gets an API token from the API using a user's credentials
         
         Args:
@@ -232,7 +232,7 @@ class MCHost24API:
         
         # Try to perform request and decode JSON response. Don't yet work on the JSON response.
         try:
-            response = api_request("post", endpoint, json=payload, auth=self.auth).json()
+            response = api_request("POST", endpoint, json=payload).json()
         except (requests.RequestException) as e:
             raise MCHost24APIError("Error during API request", endpoint) from e
         
@@ -242,8 +242,28 @@ class MCHost24API:
         except KeyError as e:
             response = APIResponse.from_dict(fix_api_response(response))
         
-
         if response.status == APIResponseStatus.UNAUTHORIZED:
-            raise MCH24UnauthorizedError()
+            raise MCH24UnauthorizedError(endpoint=endpoint)
         
         return response
+    
+    def logout(self) -> dict:
+        """Logout and invalidate the API token"""
+        
+        endpoint = "/logout"
+        
+        if self.auth is None:
+            raise MCH24UnauthorizedError("No token is present to log out", endpoint)
+        
+        try:
+            response = api_request("POST", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
