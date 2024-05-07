@@ -267,3 +267,5 @@ class MCHost24API:
         
         if response.status == APIResponseStatus.UNAUTHORIZED:
             raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        return response
