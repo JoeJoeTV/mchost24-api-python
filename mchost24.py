@@ -92,6 +92,43 @@ def api_request(method: str, endpoint: str, json=None, auth=None, **kwargs):
     
     return response
 
+def fix_api_response(response: dict):
+    """ Fixes malformed API responses with missing fields by loading defaults and handling edge cases """
+    # Workaround for issue with API
+    # Sometimes, an API response will not match the schema and have missing values
+    # In such cases, default values are inserted into the response object
+    response["data"] = response.get("data", [])
+    response["status"] = response.get("status", "ERROR")
+    response["meta"] = response.get("meta", {
+            'warnings': [],
+            'errors': [],
+            'success': []
+        })
+    response["reload_datatables"] = response.get("reload_datatables", False)
+    response["reload"] = response.get("reload_datatables", False)
+    
+    response["messages"] = response.get("messages", None)
+    response["message"] = response.get("message", None)
+    
+    if (response["messages"] is None) and (response["message"] is not None):
+        response["messages"] = [response["message"]]
+    elif (response["message"] is None) and (response["messages"] is not None):
+        messages = []
+        
+        # Collect all messages
+        for k in response["messages"]:
+            for m in response["messages"][k]:
+                messages.append(m)
+        
+        response["messages"] = messages
+        response["message"] = response["messages"][0] if len(response["messages"]) > 0 else ""
+    else:
+        response["messages"] = []
+        response["message"] = ""
+
+    return response
+
+
 class HTTPTokenAuth(requests.auth.AuthBase):
     def __init__(self, token: str):
         self.token = token
@@ -177,42 +214,11 @@ class MCHost24API:
         # Try to parse into response object and catch malformed API request with special case
         try:
             response = APIResponse.from_dict(response)
-            
-            if response.status == APIResponseStatus.UNAUTHORIZED:
-                raise MCH24UnauthorizedError()
-
-            return response
         except KeyError as e:
-            # Workaround for issue with API
-            # Sometimes, an API response will not match the schema and have missing values
-            # In such cases, default values are inserted into the response object
-            response["data"] = response.get("data", [])
-            response["status"] = response.get("status", "ERROR")
-            response["meta"] = response.get("meta", {
-                    'warnings': [],
-                    'errors': [],
-                    'success': []
-                })
-            response["reload_datatables"] = response.get("reload_datatables", False)
-            response["reload"] = response.get("reload_datatables", False)
-            
-            response["messages"] = response.get("messages", None)
-            response["message"] = response.get("message", None)
-            
-            if response["messages"] is None:
-                response["messages"] = [response["message"]]
-            elif response["message"] is None:
-                messages = []
-                
-                # Collect all messages
-                for k in response["messages"]:
-                    for m in response["messages"][k]:
-                        messages.append(m)
-                
-                response["messages"] = messages
-                response["message"] = response["messages"][0] if len(response["messages"]) > 0 else ""
-            else:
-                response["messages"] = []
-                response["message"] = ""
-            
-            return APIResponse.from_dict(response)
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError()
+        
+        return response
