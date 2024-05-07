@@ -59,8 +59,19 @@ class MCH24UnsupportedRequestMethodError(MCHost24APIError):
         super().__init__(f"Tried to access endpoint with unsupported request method: {request_method}", endpoint)
 
 
-def api_request(method: str, endpoint: str, json=None, auth=None, **kwargs):
-    r"""Perform HTTP request to API endpoint"""
+def api_request(method: str, endpoint: str, json: dict = None, auth: requests.auth.AuthBase = None, **kwargs) -> requests.Response:
+    """Perform HTTP request to API endpoint
+    
+    Args:
+        method:     The HTTP request method to use for the request
+        endpoint:   The API endpoint of the MC-Host24 API to send the request to
+        [json]:     The JSON data payload to send as a dictionary
+        [auth]:     The authentication object to use for authenticating with the API
+        **kwargs:   Any other keyword arguments to pass onto the requests.request method
+    
+    Returns:
+        The response to the HTTP request
+    """
     
     headers = {
         "accept": "application/json",
@@ -92,7 +103,7 @@ def api_request(method: str, endpoint: str, json=None, auth=None, **kwargs):
     
     return response
 
-def fix_api_response(response: dict):
+def fix_api_response(response: dict) -> dict:
     """ Fixes malformed API responses with missing fields by loading defaults and handling edge cases """
     # Workaround for issue with API
     # Sometimes, an API response will not match the schema and have missing values
@@ -189,12 +200,26 @@ class MCHost24API:
         else:
             self.auth = None
     
-    def set_token(self, token: str):
-        """ Set API token """
+    def set_token(self, token: str) -> None:
+        """Set API token 
+        
+        Args:
+            token: The API token to set
+        
+        """
         self.auth = HTTPTokenAuth(token)
     
-    def get_token(self, username: str, password: str, tfa: int = None):
-        """ Gets an API token from the API using a user's credentials """
+    def get_token(self, username: str, password: str, tfa: int = None) -> str:
+        """Gets an API token from the API using a user's credentials
+        
+        Args:
+            username: The username of the user to authenticate
+            password: The password of the user to authenticate
+            [tfa]: The 2FA code of the user, if required
+        
+        Returns:
+            An API token that can be used to interact with the API
+        """
         
         endpoint = "/token"
         payload = {
