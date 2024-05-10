@@ -209,7 +209,7 @@ class MCHost24API:
         """
         self.auth = HTTPTokenAuth(token)
     
-    def get_token(self, username: str, password: str, tfa: int = None) -> dict:
+    def get_token(self, username: str, password: str, tfa: int = None) -> APIResponse:
         """Gets an API token from the API using a user's credentials
         
         Args:
@@ -247,7 +247,7 @@ class MCHost24API:
         
         return response
     
-    def logout(self) -> dict:
+    def logout(self) -> APIResponse:
         """Logout and invalidate the API token"""
         
         endpoint = "/logout"
