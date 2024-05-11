@@ -161,6 +161,11 @@ class APIResponseStatus(Enum):
     ERROR = "ERROR"
     UNAUTHORIZED = 401
 
+class MinecraftServerBackupStatus(Enum):
+    """Enum representing the status of a Minecraft Server backup"""
+    DONE = "done"
+    RUNNING = "running"
+
 #
 #   API Data Classes
 #
@@ -195,9 +200,19 @@ class APIResponseMinecraftServer:
     cpu_usage: int                  # Current cpu usage of minecraft-server in percentage
     mem_usage: int                  # Current memory usage of minecraft-server in percentage
 
+@dataclass_json
+@dataclass
+class APIResponseMinecraftServerBackup:
+    status: MinecraftServerBackupStatus # Current status of backup
+    time: datetime  # Timestamp with nanoseconds
+    message: str
+    file: str       # Backup archive file name
+    ftp: str        # FTP address and port
+    type: string
+
 # Type definitions
-APIDataSingle = APIResponseToken | APIResponseMinecraftServer
-APIDataList = APIResponseMinecraftServer
+APIDataSingle = APIResponseToken | APIResponseMinecraftServer | APIResponseMinecraftServerBackup
+APIDataList = APIResponseMinecraftServer | APIResponseMinecraftServerBackup
 
 @dataclass_json
 @dataclass
@@ -232,6 +247,10 @@ class MCHost24API:
         
         """
         self.auth = HTTPTokenAuth(token)
+    
+    #
+    #   Authentication
+    #
     
     def get_token(self, username: str, password: str, tfa: int = None) -> APIResponse:
         """Gets an API token from the API using a user's credentials
@@ -282,6 +301,196 @@ class MCHost24API:
         if self.auth is None:
             raise MCH24UnauthorizedError("No token is present to log out", endpoint)
         
+        try:
+            response = api_request("POST", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+
+    #
+    #   Minecraft Server
+    #
+    
+    def get_minecraft_servers(self) -> APIResponse:
+        """Get a list of all minecraft servers"""
+        
+        endpoint = "/minecraftServer"
+
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+
+    def get_minecraft_server_status(self, id: int) -> APIResponse:
+        """Gets the status of a single Minecraft server
+        
+        Args:
+            id: The id of the Minecraft Server
+        """
+        
+        endpoint = f"/minecraftServer/{str(id)}/status"
+
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+
+    def start_minecraft_server(self, id: int) -> APIResponse:
+        """Starts a Minecraft server
+        
+        Args:
+            id: The id of the Minecraft Server
+        """
+        
+        endpoint = f"/minecraftServer/{str(id)}/start"
+
+        try:
+            response = api_request("POST", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+
+    def stop_minecraft_server(self, id: int) -> APIResponse:
+        """Stops a Minecraft server
+        
+        Args:
+            id: The id of the Minecraft Server
+        """
+        
+        endpoint = f"/minecraftServer/{str(id)}/stop"
+
+        try:
+            response = api_request("POST", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+
+    def restart_minecraft_server(self, id: int) -> APIResponse:
+        """Restarts a Minecraft server
+        
+        Args:
+            id: The id of the Minecraft Server
+        """
+        
+        endpoint = f"/minecraftServer/{str(id)}/restart"
+
+        try:
+            response = api_request("POST", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def get_minecraft_server_backups(self, id: int) -> APIResponse:
+        """Get a list of all backups for a Minecraft server
+        
+        Args:
+            id: The id of the Minecraft Server
+        """
+        
+        endpoint = f"/minecraftServer/{str(id)}/backups"
+
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+
+    def backup_minecraft_server(self, id: int) -> APIResponse:
+        """Starts a new Minecraft server backup
+        
+        Args:
+            id: The id of the Minecraft Server
+        """
+        
+        endpoint = f"/minecraftServer/{str(id)}/backups"
+
         try:
             response = api_request("POST", endpoint, auth=self.auth).json()
         except (requests.RequestException) as e:
