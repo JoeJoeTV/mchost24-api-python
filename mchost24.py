@@ -269,6 +269,9 @@ class MCHost24API:
         if response.status == APIResponseStatus.UNAUTHORIZED:
             raise MCH24UnauthorizedError(endpoint=endpoint)
         
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
         return response
     
     def logout(self) -> APIResponse:
@@ -291,5 +294,8 @@ class MCHost24API:
         
         if response.status == APIResponseStatus.UNAUTHORIZED:
             raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
         
         return response
