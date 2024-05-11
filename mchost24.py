@@ -7,6 +7,7 @@ import json
 from urllib.parse import urljoin
 import pprint
 import logging
+from datetime import datetime
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -167,27 +168,50 @@ class APIResponseStatus(Enum):
 @dataclass_json
 @dataclass
 class APIMeta:
-    warnings: List[str]
-    errors: List[str]
-    success: List[str]
+    warnings: List[str] # Translated warnings
+    errors: List[str]   # Translated errors
+    success: List[str]  # Translated success messages
 
 @dataclass_json
 @dataclass
 class APIResponseToken:
-    api_token: str
+    api_token: str  # API Token to be used for authentication
+
+@dataclass_json
+@dataclass
+class APIResponseMinecraftServer:
+    id: int                         # The MC-HOST24 database id
+    service_id: int                 # The MC-HOST24 service id
+    service_ordered_at: datetime    # Time at which the product was ordered
+    expire_at: datetime             # Time at which the product should expire
+    expired_at: datetime | None     # Time at which the product expired
+    product_name: str | None        # The product name
+    multicraft_id: int              # The multicraft panel id
+    address: str                    # The ipv4 address of the minecraft server with port
+    memory: int                     # Memory in Mebibyte
+    online: bool                    # Current status of minecraft server
+    players_online: int             # Current online players on minecraft server
+    players_max: int                # Maximal online players on minecraft server
+    cpu_usage: int                  # Current cpu usage of minecraft-server in percentage
+    mem_usage: int                  # Current memory usage of minecraft-server in percentage
+
+# Type definitions
+APIDataSingle = APIResponseToken | APIResponseMinecraftServer
+APIDataList = APIResponseMinecraftServer
 
 @dataclass_json
 @dataclass
 class APIResponse:
     """ Data class representing an API response """
-    data: Union[APIResponseToken, object, list]
-    status: APIResponseStatus
-    meta: APIMeta
-    success: bool
-    messages: List[str]
-    message: str
-    reload_datatables: bool
-    reload: bool
+    data: APIDataSingle | list[APIDataList] # Data returned by the API
+    status: APIResponseStatus   # Status of the API request
+    meta: APIMeta               # Translated messages used in messages
+    success: bool               # Whether the API request was successful
+    messages: List[str]         # All messages returned by the API
+    message: str                # Primary message retured by the API
+    reload_datatables: bool     # Whether to reload datatables
+    reload: bool                # Whether to reload site
+
 
 #
 #   Main Class
