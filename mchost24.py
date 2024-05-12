@@ -166,6 +166,21 @@ class MinecraftServerBackupStatus(Enum):
     DONE = "done"
     RUNNING = "running"
 
+class DomainRecordType(Enum):
+    """Enum representing the possible types of domain record usable in the API"""
+    A = "A"
+    AAAA = "AAAA"
+    CNAME = "CNAME"
+    MX = "MX"
+    NS = "NS"
+    SRV = "SRV"
+    TXT = "TXT"
+    CAA = "CAA"
+    HTTP_F = "HTTP_F"
+    HTTPS_F = "HTTPS_F"
+    HTTP_H = "HTTP_H"
+    HTTPS_H = "HTTPS_H"
+
 #
 #   API Data Classes
 #
@@ -182,14 +197,15 @@ class APIMeta:
 class APIResponseToken:
     api_token: str  # API Token to be used for authentication
 
+
 @dataclass_json
 @dataclass
 class APIResponseMinecraftServer:
     id: int                         # The MC-HOST24 database id
     service_id: int                 # The MC-HOST24 service id
-    service_ordered_at: datetime    # Time at which the product was ordered
-    expire_at: datetime             # Time at which the product should expire
-    expired_at: datetime | None     # Time at which the product expired
+    service_ordered_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp)) # Time at which the product was ordered
+    expire_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))          # Time at which the product should expire
+    expired_at: datetime | None = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))  # Time at which the product expired
     product_name: str | None        # The product name
     multicraft_id: int              # The multicraft panel id
     address: str                    # The ipv4 address of the minecraft server with port
@@ -204,21 +220,48 @@ class APIResponseMinecraftServer:
 @dataclass
 class APIResponseMinecraftServerBackup:
     status: MinecraftServerBackupStatus # Current status of backup
-    time: datetime  # Timestamp with nanoseconds
+    time: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp)) # Timestamp with nanoseconds
     message: str
     file: str       # Backup archive file name
     ftp: str        # FTP address and port
-    type: string
+    type: str
+
+
+@dataclass_json
+@dataclass
+class APIResponseDomain:
+    id: int                         # The MC-HOST24 database id
+    service_id: int                 # The MC-HOST24 service id
+    service_ordered_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp)) # Time at which the product was ordered
+    expire_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))   # Time at which the product should expire
+    expired_at: datetime | None = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))         # Time at which the product expired
+    sld: str                        # The second level domain name
+    tld: str                        # The top level domain name
+
+@dataclass_json
+@dataclass
+class APIResponseDomainRecord:
+    id: int                 # Id of domain record
+    sld: str                # SLD better known as subdomain
+    type: DomainRecordType  # The type of the record
+    target: str             # Target IP or TXT content etc.
+
+@dataclass_json
+@dataclass
+class APIResponseDomainInfo:
+    domain: APIResponseDomain               # Information about the domain
+    records: list[APIResponseDomainRecord]  # The DNS records of the domain
+    # emails: APIResponseDomain             # (Seemingly unused) Information about the registered emails for the domain
 
 # Type definitions
-APIDataSingle = APIResponseToken | APIResponseMinecraftServer | APIResponseMinecraftServerBackup
-APIDataList = APIResponseMinecraftServer | APIResponseMinecraftServerBackup
+APIDataSingle = APIResponseToken | APIResponseMinecraftServer | APIResponseMinecraftServerBackup | APIResponseDomain | APIResponseDomainRecord | APIResponseDomainInfo
+APIDataList = list[APIResponseMinecraftServer] | list[APIResponseMinecraftServerBackup] | list[APIResponseDomain] | list[APIResponseDomainRecord]
 
 @dataclass_json
 @dataclass
 class APIResponse:
     """ Data class representing an API response """
-    data: APIDataSingle | list[APIDataList] # Data returned by the API
+    data: APIDataSingle | APIDataList # Data returned by the API
     status: APIResponseStatus   # Status of the API request
     meta: APIMeta               # Translated messages used in messages
     success: bool               # Whether the API request was successful
@@ -496,6 +539,215 @@ class MCHost24API:
         except (requests.RequestException) as e:
             raise MCHost24APIError("Error during API request", endpoint) from e
         
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    #
+    #   Domain
+    #
+    
+    def get_domains(self) -> APIResponse:
+        """Get a list of all domains"""
+        
+        endpoint = "/domain"
+
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def get_available_domain_records(self) -> APIResponse:
+        """Get a list of available DNS record types"""
+        
+        endpoint = "/domain/availableRecords"
+
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def get_domain_info(self, id: int) -> APIResponse:
+        """Get additional information about a domain
+        
+        Args:
+            id: The id of the Domain
+        """
+        
+        endpoint = f"/domain/{str(id)}/info"
+
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def create_domain_dns_record(self, id: int, sld: str, type: DomainRecordType, target: str) -> APIResponse:
+        """Creates a new DNS record for the specified domain
+        
+        Args:
+            id: The id of the Domain to create the record for
+            sld: The subdomain for the record
+            type: The type of record to create
+            target: The target that the record points to
+        """
+        
+        endpoint = f"/domain/{str(id)}/dns"
+        payload = {
+            "sld": sld,
+            "type": type.value,
+            "target": target
+        }
+        
+        # Try to perform request and decode JSON response. Don't yet work on the JSON response.
+        try:
+            response = api_request("POST", endpoint, json=payload, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        # Try to parse into response object and catch malformed API request with special case
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def delete_domain_dns_record(self, id: int, record_id: int) -> APIResponse:
+        """Deletes an existing DNS record
+        
+        Args:
+            id: The id of the Domain to delete the record from
+            record_id: The id of the record to delete
+        """
+        
+        endpoint = f"/domain/{str(id)}/dns/{str(record_id)}"
+        
+        # Try to perform request and decode JSON response. Don't yet work on the JSON response.
+        try:
+            response = api_request("DELETE", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        # Try to parse into response object and catch malformed API request with special case
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def create_domain_email(self, id: int, email: str, password: str) -> APIResponse:
+        """Creates a new EMail account for the specified domain
+        
+        Args:
+            id: The id of the Domain to create the EMail account for
+            email: The email username for the new account
+            password: The password for the new account
+        """
+        
+        endpoint = f"/domain/{str(id)}/email"
+        payload = {
+            "email": sld,
+            "password": type.value,
+        }
+        
+        # Try to perform request and decode JSON response. Don't yet work on the JSON response.
+        try:
+            response = api_request("POST", endpoint, json=payload, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        # Try to parse into response object and catch malformed API request with special case
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def delete_domain_dns_record(self, id: int, email_id: int) -> APIResponse:
+        """Deletes an existing EMail account
+        
+        Args:
+            id: The id of the Domain to delete the record from
+            email_id: The id of the EMail account to delete
+        """
+        
+        endpoint = f"/domain/{str(id)}/email/{str(email_id)}"
+        
+        # Try to perform request and decode JSON response. Don't yet work on the JSON response.
+        try:
+            response = api_request("DELETE", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        # Try to parse into response object and catch malformed API request with special case
         try:
             response = APIResponse.from_dict(response)
         except KeyError as e:
