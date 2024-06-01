@@ -118,6 +118,7 @@ def fix_api_response(response: dict) -> dict:
         })
     response["reload_datatables"] = response.get("reload_datatables", False)
     response["reload"] = response.get("reload_datatables", False)
+    response["success"] = response.get("success", False)
     
     response["messages"] = response.get("messages", None)
     response["message"] = response.get("message", None)
@@ -287,7 +288,8 @@ class APIDataDomainInfo:
     # emails: APIDataDomain             # (Seemingly unused) Information about the registered emails for the domain
 
 # Type definitions
-APIData = APIDataToken | APIDataMinecraftServer | APIDataMinecraftServerBackup | APIDataDomain | APIDataDomainRecord | APIDataDomainInfo
+APIDataAvailableRecords = dict[str, str]
+APIData = APIDataToken | APIDataMinecraftServer | APIDataMinecraftServerBackup | APIDataDomain | APIDataDomainRecord | APIDataDomainInfo | APIDataAvailableRecords
 
 @dataclass_json
 @dataclass
