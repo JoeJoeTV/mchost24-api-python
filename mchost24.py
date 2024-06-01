@@ -42,6 +42,9 @@ class MCHost24APIError(Exception):
 class MCH24UnauthorizedError(MCHost24APIError):
     """Client is not authenticated to talk to the API"""
 
+class MCH24ObjectNotFoundError(MCHost24APIError):
+    """The requested object could not be found"""
+    
 class MCH24LoginFailedError(MCHost24APIError):
     """Login to API failed"""
 
@@ -88,13 +91,15 @@ def api_request(method: str, endpoint: str, json: dict = None, auth: requests.au
     if response.status_code == 404:
         try:
             resjson = response.json()
-            
-            if "resource not found" in resjson["message"]:
-                raise MCH24UnknownEndpointError(endpoint)
-            else:
-                return response
         except Exception as e:
             raise MCHost24APIError("Error while parsing 404 response") from e
+            
+        if "resource not found" in resjson["message"]:
+            raise MCH24UnknownEndpointError(endpoint)
+        elif "No query results for model" in resjson["message"]:
+            raise MCH24ObjectNotFoundError(resjson["message"], endpoint)
+        else:
+            return response
     elif response.status_code == 405:
         raise MCH24UnsupportedRequestMethodError(endpoint, method)
     elif response.status_code == 403:
