@@ -140,6 +140,39 @@ def fix_api_response(response: dict) -> dict:
 
     return response
 
+def api_request_decoder(origin_value: dict | list, dataclass_types: list[type]):
+    """Deconder function to use with a @dataclass_json to fix importing unions of lists of unions recursively"""
+    decoded_value = None
+    
+    if type(origin_value) is dict:
+        # If origin value is a dict, we can directly decode it using the dataclass
+        
+        for dc in dataclass_types:
+            try:
+                decoded_value = dc.from_dict(origin_value)
+                break
+            except Exception as e:
+                continue
+    elif type(origin_value) is list:
+        # If origin value is a list, we have to iterate over the elements and decode each one
+        
+        for dc in dataclass_types:
+            try:
+                value_list = []
+                for e in origin_value:
+                    value_list.append(dc.from_dict(e))
+                decoded_value = value_list
+                break
+            except Exception as e:
+                continue
+    else:
+        raise TypeError("'origin_value' either has to be a dict or a list!")
+    
+    # If none of the dataclasses matched, we simply return the original value
+    if decoded_value is None:
+        decoded_value = origin_value
+    
+    return decoded_value
 
 class HTTPTokenAuth(requests.auth.AuthBase):
     def __init__(self, token: str):
@@ -254,14 +287,13 @@ class APIResponseDomainInfo:
     # emails: APIResponseDomain             # (Seemingly unused) Information about the registered emails for the domain
 
 # Type definitions
-APIDataSingle = APIResponseToken | APIResponseMinecraftServer | APIResponseMinecraftServerBackup | APIResponseDomain | APIResponseDomainRecord | APIResponseDomainInfo
-APIDataList = list[APIResponseMinecraftServer] | list[APIResponseMinecraftServerBackup] | list[APIResponseDomain] | list[APIResponseDomainRecord]
+APIData = APIResponseToken | APIResponseMinecraftServer | APIResponseMinecraftServerBackup | APIResponseDomain | APIResponseDomainRecord | APIResponseDomainInfo
 
 @dataclass_json
 @dataclass
 class APIResponse:
     """ Data class representing an API response """
-    data: APIDataSingle | APIDataList # Data returned by the API
+    data: APIData | list[APIData] = field(metadata=config(decoder=lambda x: api_request_decoder(x, list(APIData.__args__))))    # Data returned by the API
     status: APIResponseStatus   # Status of the API request
     meta: APIMeta               # Translated messages used in messages
     success: bool               # Whether the API request was successful
