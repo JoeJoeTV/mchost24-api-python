@@ -770,7 +770,7 @@ class MCHost24API:
         
         return response
     
-    def delete_domain_dns_record(self, id: int, email_id: int) -> APIResponse:
+    def delete_domain_email(self, id: int, email_id: int) -> APIResponse:
         """Deletes an existing EMail account
         
         Args:
