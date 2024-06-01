@@ -227,13 +227,13 @@ class APIMeta:
 
 @dataclass_json
 @dataclass
-class APIResponseToken:
+class APIDataToken:
     api_token: str  # API Token to be used for authentication
 
 
 @dataclass_json
 @dataclass
-class APIResponseMinecraftServer:
+class APIDataMinecraftServer:
     id: int                         # The MC-HOST24 database id
     service_id: int                 # The MC-HOST24 service id
     service_ordered_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp)) # Time at which the product was ordered
@@ -251,7 +251,7 @@ class APIResponseMinecraftServer:
 
 @dataclass_json
 @dataclass
-class APIResponseMinecraftServerBackup:
+class APIDataMinecraftServerBackup:
     status: MinecraftServerBackupStatus # Current status of backup
     time: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp)) # Timestamp with nanoseconds
     message: str
@@ -262,7 +262,7 @@ class APIResponseMinecraftServerBackup:
 
 @dataclass_json
 @dataclass
-class APIResponseDomain:
+class APIDataDomain:
     id: int                         # The MC-HOST24 database id
     service_id: int                 # The MC-HOST24 service id
     service_ordered_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp)) # Time at which the product was ordered
@@ -273,7 +273,7 @@ class APIResponseDomain:
 
 @dataclass_json
 @dataclass
-class APIResponseDomainRecord:
+class APIDataDomainRecord:
     id: int                 # Id of domain record
     sld: str                # SLD better known as subdomain
     type: DomainRecordType  # The type of the record
@@ -281,13 +281,13 @@ class APIResponseDomainRecord:
 
 @dataclass_json
 @dataclass
-class APIResponseDomainInfo:
-    domain: APIResponseDomain               # Information about the domain
-    records: list[APIResponseDomainRecord]  # The DNS records of the domain
-    # emails: APIResponseDomain             # (Seemingly unused) Information about the registered emails for the domain
+class APIDataDomainInfo:
+    domain: APIDataDomain               # Information about the domain
+    records: list[APIDataDomainRecord]  # The DNS records of the domain
+    # emails: APIDataDomain             # (Seemingly unused) Information about the registered emails for the domain
 
 # Type definitions
-APIData = APIResponseToken | APIResponseMinecraftServer | APIResponseMinecraftServerBackup | APIResponseDomain | APIResponseDomainRecord | APIResponseDomainInfo
+APIData = APIDataToken | APIDataMinecraftServer | APIDataMinecraftServerBackup | APIDataDomain | APIDataDomainRecord | APIDataDomainInfo
 
 @dataclass_json
 @dataclass
