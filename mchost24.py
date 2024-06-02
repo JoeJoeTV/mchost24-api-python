@@ -7,7 +7,7 @@ import json
 from urllib.parse import urljoin
 import pprint
 import logging
-from datetime import datetime
+import datetime
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -180,6 +180,36 @@ def api_request_decoder(origin_value: dict | list, dataclass_types: list[type]):
     
     return decoded_value
 
+def stats_time_decode(original_value: list[str]) -> list[datetime.time | datetime.datetime]:
+    """Decodes the list of time/date strings used by the rootserver statistics to datetime.datetime and time objects"""
+    
+    decoded_value= []
+    
+    for timestr in original_value:
+        try:
+            decoded_value.append(datetime.datetime.strptime(timestr, "%d.%m.%y %H:%M"))
+        except ValueError:
+            t = datetime.datetime.strptime(timestr, "%H:%M:%S")
+            decoded_value.append(datetime.time(hour=t.hour, minute=t.minute, second=t.second))
+    
+    return decoded_value
+
+def stats_time_encode(original_value: list[datetime.time | datetime.datetime]) -> list[str]:
+    """Encodes lists of datetime.datetime and time objects into the format used by the rootserver statistics"""
+    
+    decoded_value= []
+    
+    for dt in original_value:
+        if isinstance(dt, datetime.datetime):
+            decoded_value.append(dt.strftime("%d.%m.%y %H:%M"))
+        elif isinstance(dt, time):
+            decoded_value.append(dt.strftime("%H:%M:%S"))
+        else:
+            raise ValueError(f"Value '{str(dt)}' is not a datetime.datetime or time object!")
+    
+    return decoded_value
+
+
 class HTTPTokenAuth(requests.auth.AuthBase):
     def __init__(self, token: str):
         self.token = token
@@ -249,9 +279,9 @@ class APIDataToken:
 class APIDataMinecraftServer:
     id: int                         # The MC-HOST24 database id
     service_id: int                 # The MC-HOST24 service id
-    service_ordered_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp)) # Time at which the product was ordered
-    expire_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))          # Time at which the product should expire
-    expired_at: datetime | None = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))  # Time at which the product expired
+    service_ordered_at: datetime.datetime = field(metadata=config(encoder=datetime.datetime.timestamp, decoder=datetime.datetime.fromtimestamp)) # Time at which the product was ordered
+    expire_at: datetime.datetime = field(metadata=config(encoder=datetime.datetime.timestamp, decoder=datetime.datetime.fromtimestamp))          # Time at which the product should expire
+    expired_at: datetime.datetime | None = field(metadata=config(encoder=datetime.datetime.timestamp, decoder=datetime.datetime.fromtimestamp))  # Time at which the product expired
     product_name: str | None        # The product name
     multicraft_id: int              # The multicraft panel id
     address: str                    # The ipv4 address of the minecraft server with port
@@ -266,7 +296,7 @@ class APIDataMinecraftServer:
 @dataclass
 class APIDataMinecraftServerBackup:
     status: MinecraftServerBackupStatus # Current status of backup
-    time: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp)) # Timestamp with nanoseconds
+    time: datetime.datetime = field(metadata=config(encoder=datetime.datetime.timestamp, decoder=datetime.datetime.fromtimestamp)) # Timestamp with nanoseconds
     message: str
     file: str       # Backup archive file name
     ftp: str        # FTP address and port
@@ -278,9 +308,9 @@ class APIDataMinecraftServerBackup:
 class APIDataDomain:
     id: int                         # The MC-HOST24 database id
     service_id: int                 # The MC-HOST24 service id
-    service_ordered_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))   # Time at which the product was ordered
-    expire_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))            # Time at which the product should expire
-    expired_at: datetime | None = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))    # Time at which the product expired
+    service_ordered_at: datetime.datetime = field(metadata=config(encoder=datetime.datetime.timestamp, decoder=datetime.datetime.fromtimestamp))   # Time at which the product was ordered
+    expire_at: datetime.datetime = field(metadata=config(encoder=datetime.datetime.timestamp, decoder=datetime.datetime.fromtimestamp))            # Time at which the product should expire
+    expired_at: datetime.datetime | None = field(metadata=config(encoder=datetime.datetime.timestamp, decoder=datetime.datetime.fromtimestamp))    # Time at which the product expired
     sld: str                        # The second level domain name
     tld: str                        # The top level domain name
 
@@ -311,9 +341,9 @@ class APIDataRootServer:
     id: int                             # The MC-HOST24 database id
     service_id: int                     # The MC-HOST24 service id
     service_id: int                     # The MC-HOST24 service id
-    service_ordered_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))   # Time at which the product was ordered
-    expire_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))            # Time at which the product should expire
-    expired_at: datetime | None = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))    # Time at which the product expired
+    service_ordered_at: datetime.datetime = field(metadata=config(encoder=datetime.datetime.timestamp, decoder=datetime.datetime.fromtimestamp))   # Time at which the product was ordered
+    expire_at: datetime.datetime = field(metadata=config(encoder=datetime.datetime.timestamp, decoder=datetime.datetime.fromtimestamp))            # Time at which the product should expire
+    expired_at: datetime.datetime | None = field(metadata=config(encoder=datetime.datetime.timestamp, decoder=datetime.datetime.fromtimestamp))    # Time at which the product expired
     product_name: str | None            # The product name
     cores: int                          # Amout of cores assigned to the rootserver
     memory: int                         # Rootserver mermory in Mebibytes
@@ -330,7 +360,7 @@ class APIDataRootServer:
 @dataclass
 class APIDataRootServerBackup:
     id: int         # The MC-HOST24 database id
-    created_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))   # Time at which the backup was created
+    created_at: datetime.datetime = field(metadata=config(encoder=datetime.datetime.timestamp, decoder=datetime.datetime.fromtimestamp))   # Time at which the backup was created
     finished: bool  # Whether the backups is finished or still in progress
 
 @dataclass_json
@@ -341,7 +371,7 @@ class APIDataRootServerVNC:
 @dataclass_json
 @dataclass
 class APIDataStats:
-    time: list[str]     #TODO: Parse to datetime
+    time: list[datetime.datetime | datetime.time] = field(metadata=config(encoder=stats_time_encode, decoder=stats_time_decode))
     cpu: list[float]
     mem: list[float]
     diskread: list[float]
