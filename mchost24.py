@@ -10,8 +10,6 @@ import logging
 import datetime
 import pytimeparse2
 
-logging.getLogger().setLevel(logging.DEBUG)
-
 #
 #   Constants
 #
@@ -1621,5 +1619,3 @@ class MCHost24API:
             raise MCHost24APIError("API raised error: " + response.message, endpoint)
         
         return response
-    
-    
