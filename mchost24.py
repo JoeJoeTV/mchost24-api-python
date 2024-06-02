@@ -456,6 +456,8 @@ class MCHost24API:
         else:
             self.auth = None
     
+    #TODO: Abstract copy-pasted part of functions into common function
+    
     def set_token(self, token: str) -> None:
         """Set API token 
         
@@ -1332,8 +1334,8 @@ class MCHost24API:
         
         raise MCHost24APIError("The /support/tickets/info endpoint is currently not supported")
     
-    def get_tickets(self) -> APIResponse:
-        """Get a list of all tickets"""
+    def get_support_tickets(self) -> APIResponse:
+        """Get a list of all support tickets"""
         
         endpoint = "/support/tickets"
 
@@ -1342,6 +1344,158 @@ class MCHost24API:
         except (requests.RequestException) as e:
             raise MCHost24APIError("Error during API request", endpoint) from e
         
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def create_support_ticket(self, subject: str, text: str, service_id: int, category_id: int) -> APIResponse:
+        """Creates a new support ticket
+        
+        Args:
+            subject: The subject line of the support ticket
+            text: The text content of the support ticket
+            service_id: The service ID to link the ticket to
+            category_id: The category ID of the support ticket
+        """
+        
+        endpoint = "/support/tickets"
+        payload = {
+            "betr": subject,
+            "text": text,
+            "service": service_id,
+            "ticket_category_id": category_id
+        }
+        
+        # Try to perform request and decode JSON response. Don't yet work on the JSON response.
+        try:
+            response = api_request("POST", endpoint, json=payload, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        # Try to parse into response object and catch malformed API request with special case
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def get_support_tickets(self, id: int) -> APIResponse:
+        """Gets information about a support ticket with the specified ID"""
+        
+        endpoint = f"/support/tickets/{str(id)}"
+
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def reply_to_support_ticket(self, id: int, text: str) -> APIResponse:
+        """Sends reply to a support ticket
+        
+        Args:
+            id: The ID of the support ticket to send a reply to
+            text: The text to send as a reply to the support ticket
+        """
+        
+        endpoint = f"/support/tickets/{str(id)}/reply"
+        payload = {
+            "reply": text
+        }
+        
+        # Try to perform request and decode JSON response. Don't yet work on the JSON response.
+        try:
+            response = api_request("POST", endpoint, json=payload, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        # Try to parse into response object and catch malformed API request with special case
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def reopen_support_ticket(self, id: int) -> APIResponse:
+        """Reopens a closed support ticket
+        
+        Args:
+            id: The ID of the support ticket to reopen
+        """
+        
+        endpoint = f"/support/tickets/{str(id)}/reopen"
+        
+        # Try to perform request and decode JSON response. Don't yet work on the JSON response.
+        try:
+            response = api_request("POST", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        # Try to parse into response object and catch malformed API request with special case
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def close_support_ticket(self, id: int) -> APIResponse:
+        """Closes an open support ticket
+        
+        Args:
+            id: The ID of the support ticket to close
+        """
+        
+        endpoint = f"/support/tickets/{str(id)}/close"
+        
+        # Try to perform request and decode JSON response. Don't yet work on the JSON response.
+        try:
+            response = api_request("POST", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        # Try to parse into response object and catch malformed API request with special case
         try:
             response = APIResponse.from_dict(response)
         except KeyError as e:
