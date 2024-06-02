@@ -380,9 +380,19 @@ class APIDataStats:
     netout: list[float]
     maxmem: float
 
+@dataclass_json
+@dataclass
+class APIDataProfile:
+    id: int                     # MC-HOST24 database id
+    name: str                   # Username of the account
+    rname: str                  # Real name of the account
+    email: str                  # Email of the account
+    money: float                # Current balance of the account
+    donation_url: str | None    # Donation URL of the account, if set
+
 # Type definitions
 APIDataAvailableRecords = dict[str, str]
-APIData = APIDataToken | APIDataMinecraftServer | APIDataMinecraftServerBackup | APIDataDomain | APIDataDomainRecord | APIDataDomainInfo | APIDataAvailableRecords | APIDataRootServer | APIDataRootServerBackup | APIDataRootServerVNC | APIDataStats
+APIData = APIDataToken | APIDataMinecraftServer | APIDataMinecraftServerBackup | APIDataDomain | APIDataDomainRecord | APIDataDomainInfo | APIDataAvailableRecords | APIDataRootServer | APIDataRootServerBackup | APIDataRootServerVNC | APIDataStats | APIDataProfile
 
 @dataclass_json
 @dataclass
@@ -1184,7 +1194,6 @@ class MCHost24API:
         
         return response
     
-        
     def get_rootserver_vnc(self, id: int) -> APIResponse:
         """Gets a URL to the VNC web access of a Rootserver
         
@@ -1228,6 +1237,35 @@ class MCHost24API:
         # Try to perform request and decode JSON response. Don't yet work on the JSON response.
         try:
             response = api_request("GET", endpoint, json=payload, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        # Try to parse into response object and catch malformed API request with special case
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    #
+    #   User
+    #
+    
+    def get_profile(self) -> APIResponse:
+        """Gets profile information about the authenticated user"""
+        
+        endpoint = "/profile"
+        
+        # Try to perform request and decode JSON response. Don't yet work on the JSON response.
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
         except (requests.RequestException) as e:
             raise MCHost24APIError("Error during API request", endpoint) from e
         
