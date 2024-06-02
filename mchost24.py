@@ -8,6 +8,7 @@ from urllib.parse import urljoin
 import pprint
 import logging
 import datetime
+import pytimeparse2
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -209,6 +210,29 @@ def stats_time_encode(original_value: list[datetime.time | datetime.datetime]) -
     
     return decoded_value
 
+def runtime_timespan_decode(original_value: str) -> datetime.timedelta:
+    """Decodes a timespan in natural language to a timedelta object"""
+    
+    pytimeparse2.disable_dateutil()
+    secs = pytimeparse2.parse(original_value, as_timedelta=False)
+    return datetime.timedelta(seconds=secs)
+
+def runtime_timespan_encode(original_value: datetime.timedelta) -> str:
+    """Encodes a timespan given as a timedelta object into natrual language"""
+    
+    # See https://stackoverflow.com/a/13756038/11286087
+    PERIODS = [
+        ('year',    60*60*24*365),
+        ('day',     60*60*24)
+    ]
+    
+    secs = int(original_value.total_seconds())
+    
+    for period_name, period_seconds in PERIODS:
+        if secs >= period_seconds:
+            period_value, secs = divmod(secs, period_seconds)
+            has_s = 's' if period_value > 1 else ''
+            return f"{str(period_value)} {period_name}{has_s}"
 
 class HTTPTokenAuth(requests.auth.AuthBase):
     def __init__(self, token: str):
@@ -229,12 +253,10 @@ class APIResponseStatus(Enum):
     SUCCESS = "SUCCESS"
     ERROR = "ERROR"
     UNAUTHORIZED = 401
-
 class MinecraftServerBackupStatus(Enum):
     """Enum representing the status of a Minecraft Server backup"""
     DONE = "done"
     RUNNING = "running"
-
 class DomainRecordType(Enum):
     """Enum representing the possible types of domain record usable in the API"""
     A = "A"
@@ -249,20 +271,25 @@ class DomainRecordType(Enum):
     HTTPS_F = "HTTPS_F"
     HTTP_H = "HTTP_H"
     HTTPS_H = "HTTPS_H"
-
 class TimeFrame(Enum):
     HOUR = "hour"
     DAY = "day"
     WEEK = "week"
     MONTH = "month"
     YEAR = "year"
-
 class TicketState(Enum):
     CLOSED = "CLOSED"
     OPENED = "OPENED"
-
 class SpecialUser(Enum):
     SYSTEM = "SYSTEM"
+class DiscountApplyType(Enum):
+    NEW = "NEW"
+    RENEW = "RENEW"
+    UPGRADE = "UPGRADE"
+
+class DiscountType(Enum):
+    PERCENT = "PERCENT"
+    LIMITED_OFFER = "LIMITED_OFFER"
 
 #
 #   API Data Classes
@@ -427,9 +454,31 @@ class APIDataTicket:
     #NOTE: The field returned by the API is called 'updated_ad' which is probably a typo
     updated_at: datetime.datetime | None = field(metadata=config(field_name="updated_ad", encoder=lambda x: datetime.datetime.strftime(x, "%Y-%m-%dT%H:%M:%S.%fZ"), decoder=lambda x: datetime.datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%fZ")))
 
+@dataclass_json
+@dataclass
+class Discount:
+    id: int                     # Database id of discount
+    discount_percent: int       # Percentage value of the discount
+    type: DiscountApplyType     # Discount application type
+    start_at: datetime.datetime = field(metadata=config(encoder=lambda x: datetime.datetime.strftime(x, "%Y-%m-%dT%H:%M:%S.%fZ"), decoder=lambda x: datetime.datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%fZ")))
+    end_at: datetime.datetime = field(metadata=config(encoder=lambda x: datetime.datetime.strftime(x, "%Y-%m-%dT%H:%M:%S.%fZ"), decoder=lambda x: datetime.datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%fZ")))
+    discount_type: DiscountType # Discount type
+
+@dataclass_json
+@dataclass
+class RuntimePrice:
+    runtime: datetime.timedelta = field(metadata=config(encoder=runtime_timespan_encode, decoder=runtime_timespan_decode))  # Renew period
+    price: float    # Renew price for period
+
+@dataclass_json
+@dataclass
+class APIDataServiceRenew:
+    runtimes: list[RuntimePrice]    # Available runtimes with corresponding prices
+    discount: Discount | None       # Applicable discount
+
 # Type definitions
 APIDataAvailableRecords = dict[str, str]
-APIData = APIDataToken | APIDataMinecraftServer | APIDataMinecraftServerBackup | APIDataDomain | APIDataDomainRecord | APIDataDomainInfo | APIDataAvailableRecords | APIDataRootServer | APIDataRootServerBackup | APIDataRootServerVNC | APIDataStats | APIDataProfile | APIDataTicket
+APIData = APIDataToken | APIDataMinecraftServer | APIDataMinecraftServerBackup | APIDataDomain | APIDataDomainRecord | APIDataDomainInfo | APIDataAvailableRecords | APIDataRootServer | APIDataRootServerBackup | APIDataRootServerVNC | APIDataStats | APIDataProfile | APIDataTicket | APIDataServiceRenew
 
 @dataclass_json
 @dataclass
@@ -1508,3 +1557,69 @@ class MCHost24API:
             raise MCHost24APIError("API raised error: " + response.message, endpoint)
         
         return response
+    
+    #
+    #   Service
+    #
+    
+    def get_service_renew_price(self, id: int) -> APIResponse:
+        """Gets the renew price for a service
+        
+        Args:
+            id: The ID of the service to get the price for
+        """
+        
+        endpoint = f"/service/{str(id)}/price"
+
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def renew_service(self, id: int, runtime: datetime.timedelta) -> APIResponse:
+        """Renews a service for a given runtime
+        
+        Args:
+            id: The ID of the service to renew
+            runtime: The runtime to renew the service for. Has to be one of the available runtimes
+        """
+        
+        endpoint = f"/service/{str(id)}/renew"
+        payload = {
+            "runtime": runtime_timespan_encode(runtime)
+        }
+        
+        # Try to perform request and decode JSON response. Don't yet work on the JSON response.
+        try:
+            response = api_request("POST", endpoint, json=payload, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        # Try to parse into response object and catch malformed API request with special case
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    
