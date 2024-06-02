@@ -880,8 +880,8 @@ class MCHost24API:
         
         endpoint = f"/domain/{str(id)}/email"
         payload = {
-            "email": sld,
-            "password": type.value,
+            "email": email,
+            "password": password,
         }
         
         # Try to perform request and decode JSON response. Don't yet work on the JSON response.
