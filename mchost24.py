@@ -257,6 +257,13 @@ class TimeFrame(Enum):
     MONTH = "month"
     YEAR = "year"
 
+class TicketState(Enum):
+    CLOSED = "CLOSED"
+    OPENED = "OPENED"
+
+class SpecialUser(Enum):
+    SYSTEM = "SYSTEM"
+
 #
 #   API Data Classes
 #
@@ -390,9 +397,39 @@ class APIDataProfile:
     money: float                # Current balance of the account
     donation_url: str | None    # Donation URL of the account, if set
 
+@dataclass_json
+@dataclass
+class TicketAnswer:
+    id: int                             # Database id of ticket answer
+    ticket_id: int                      # Database id of reference ticket
+    msg: str                            # Content of answer
+    user_id: int | None | SpecialUser   # User id who sent the reply
+    col_id: int | None                  # ID of the collaborator who sent the reply
+    created_at: datetime.datetime | None = field(metadata=config(encoder=lambda x: datetime.datetime.strftime(x, "%Y-%m-%dT%H:%M:%S.%fZ"), decoder=lambda x: datetime.datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%fZ")))
+    updated_at: datetime.datetime | None = field(metadata=config(encoder=lambda x: datetime.datetime.strftime(x, "%Y-%m-%dT%H:%M:%S.%fZ"), decoder=lambda x: datetime.datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%fZ")))
+    deleted_at: datetime.datetime | None = field(metadata=config(encoder=lambda x: datetime.datetime.strftime(x, "%Y-%m-%dT%H:%M:%S.%fZ"), decoder=lambda x: datetime.datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%fZ")))
+
+@dataclass_json
+@dataclass
+class APIDataTicket:
+    id: int                         # Ticket id from Database
+    user_id: int                    # User id of the opener
+    col_id: int | None              # ID of the collaborator
+    subject: str = field(metadata=config(field_name="betr"))    # Subject of the ticket
+    msg: str                        # Content of the ticket
+    state: TicketState              # State of the ticket
+    server_id: int | None           # Server id mentioned in the ticket
+    service_id: int | None          # Service id mentioned in the ticket
+    ticket_category_id: str | None  # Id of the ticket category
+    answers: list[TicketAnswer]     # List of answers to the ticket
+    pinned: bool                    # Whether the ticket is pinned of not
+    created_at: datetime.datetime | None = field(metadata=config(encoder=lambda x: datetime.datetime.strftime(x, "%Y-%m-%dT%H:%M:%S.%fZ"), decoder=lambda x: datetime.datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%fZ")))
+    #NOTE: The field returned by the API is called 'updated_ad' which is probably a typo
+    updated_at: datetime.datetime | None = field(metadata=config(field_name="updated_ad", encoder=lambda x: datetime.datetime.strftime(x, "%Y-%m-%dT%H:%M:%S.%fZ"), decoder=lambda x: datetime.datetime.strptime(x, "%Y-%m-%dT%H:%M:%S.%fZ")))
+
 # Type definitions
 APIDataAvailableRecords = dict[str, str]
-APIData = APIDataToken | APIDataMinecraftServer | APIDataMinecraftServerBackup | APIDataDomain | APIDataDomainRecord | APIDataDomainInfo | APIDataAvailableRecords | APIDataRootServer | APIDataRootServerBackup | APIDataRootServerVNC | APIDataStats | APIDataProfile
+APIData = APIDataToken | APIDataMinecraftServer | APIDataMinecraftServerBackup | APIDataDomain | APIDataDomainRecord | APIDataDomainInfo | APIDataAvailableRecords | APIDataRootServer | APIDataRootServerBackup | APIDataRootServerVNC | APIDataStats | APIDataProfile | APIDataTicket
 
 @dataclass_json
 @dataclass
@@ -1270,6 +1307,41 @@ class MCHost24API:
             raise MCHost24APIError("Error during API request", endpoint) from e
         
         # Try to parse into response object and catch malformed API request with special case
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    #
+    #   Ticketsystem
+    #
+    
+    def get_ticketsystem_info(self) -> None:
+        """Gets information about the ticketsystem"""
+        
+        #TODO: Implement
+        # Currently not aupported as the API response does not follow the schema at all
+        
+        raise MCHost24APIError("The /support/tickets/info endpoint is currently not supported")
+    
+    def get_tickets(self) -> APIResponse:
+        """Get a list of all tickets"""
+        
+        endpoint = "/support/tickets"
+
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
         try:
             response = APIResponse.from_dict(response)
         except KeyError as e:
