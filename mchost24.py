@@ -220,6 +220,13 @@ class DomainRecordType(Enum):
     HTTP_H = "HTTP_H"
     HTTPS_H = "HTTPS_H"
 
+class TimeFrame(Enum):
+    HOUR = "hour"
+    DAY = "day"
+    WEEK = "week"
+    MONTH = "month"
+    YEAR = "year"
+
 #
 #   API Data Classes
 #
@@ -271,9 +278,9 @@ class APIDataMinecraftServerBackup:
 class APIDataDomain:
     id: int                         # The MC-HOST24 database id
     service_id: int                 # The MC-HOST24 service id
-    service_ordered_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp)) # Time at which the product was ordered
-    expire_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))   # Time at which the product should expire
-    expired_at: datetime | None = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))         # Time at which the product expired
+    service_ordered_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))   # Time at which the product was ordered
+    expire_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))            # Time at which the product should expire
+    expired_at: datetime | None = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))    # Time at which the product expired
     sld: str                        # The second level domain name
     tld: str                        # The top level domain name
 
@@ -292,9 +299,60 @@ class APIDataDomainInfo:
     records: list[APIDataDomainRecord]  # The DNS records of the domain
     # emails: APIDataDomain             # (Seemingly unused) Information about the registered emails for the domain
 
+@dataclass_json
+@dataclass
+class RootServerAddress:
+    ip: str             # IPv4 address assigned to server
+    rdns: str | None    # Reverse DNS entry for IP address
+
+@dataclass_json
+@dataclass
+class APIDataRootServer:
+    id: int                             # The MC-HOST24 database id
+    service_id: int                     # The MC-HOST24 service id
+    service_id: int                     # The MC-HOST24 service id
+    service_ordered_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))   # Time at which the product was ordered
+    expire_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))            # Time at which the product should expire
+    expired_at: datetime | None = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))    # Time at which the product expired
+    product_name: str | None            # The product name
+    cores: int                          # Amout of cores assigned to the rootserver
+    memory: int                         # Rootserver mermory in Mebibytes
+    disk_size: int                      # Rootserver disk size in Gibibytes
+    installed: bool                     # Whether the server is installed or not
+    traffic: int                        # Maximum value in gigabytes that the server can use in terms of traffic (can be increased via support if exceeded)
+    curr_traffic: float                 # Current traffic value in gigabytes
+    online: bool                        # Whether the server is online
+    cpu_pc: int                         # Current cpu usage in percentage
+    curr_memory: int                    # Current memory usage in gibibytes
+    addresses: list[RootServerAddress]  # The addresses assigned to the rootserver
+
+@dataclass_json
+@dataclass
+class APIDataRootServerBackup:
+    id: int         # The MC-HOST24 database id
+    created_at: datetime = field(metadata=config(encoder=datetime.timestamp, decoder=datetime.fromtimestamp))   # Time at which the backup was created
+    finished: bool  # Whether the backups is finished or still in progress
+
+@dataclass_json
+@dataclass
+class APIDataRootServerVNC:
+    url: str    # The URL to the VNC web access
+
+@dataclass_json
+@dataclass
+class APIDataStats:
+    time: list[str]     #TODO: Parse to datetime
+    cpu: list[float]
+    mem: list[float]
+    diskread: list[float]
+    diskwrite: list[float]
+    netin: list[float]
+    netout: list[float]
+    maxmem: float
+
 # Type definitions
 APIDataAvailableRecords = dict[str, str]
-APIData = APIDataToken | APIDataMinecraftServer | APIDataMinecraftServerBackup | APIDataDomain | APIDataDomainRecord | APIDataDomainInfo | APIDataAvailableRecords
+APIData = APIDataToken | APIDataMinecraftServer | APIDataMinecraftServerBackup | APIDataDomain | APIDataDomainRecord | APIDataDomainInfo | APIDataAvailableRecords | APIDataRootServer | APIDataRootServerBackup | APIDataRootServerVNC | APIDataStats
 
 @dataclass_json
 @dataclass
@@ -563,7 +621,6 @@ class MCHost24API:
         
         return response
     
-
     def backup_minecraft_server(self, id: int) -> APIResponse:
         """Starts a new Minecraft server backup
         
@@ -783,6 +840,364 @@ class MCHost24API:
         # Try to perform request and decode JSON response. Don't yet work on the JSON response.
         try:
             response = api_request("DELETE", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        # Try to parse into response object and catch malformed API request with special case
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    #
+    #   Rootserver
+    #
+    
+    def get_rootservers(self) -> APIResponse:
+        """Get a list of all Rootserver"""
+        
+        endpoint = "/vserver"
+
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def get_rootserver_status(self, id: int) -> APIResponse:
+        """Get the status of a Rootserver
+        
+        Args:
+            id: The id of the Rootserver
+        """
+        
+        endpoint = f"/vserver/{str(id)}/status"
+
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+        """Gets the status of a single Minecraft server
+        
+        Args:
+            id: The id of the Minecraft Server
+        """
+        
+        endpoint = f"/minecraftServer/{str(id)}/status"
+
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+
+    def start_rootserver(self, id: int) -> APIResponse:
+        """Starts a Rootserver
+        
+        Args:
+            id: The id of the Rootserver
+        """
+        
+        endpoint = f"/vserver/{str(id)}/start"
+
+        try:
+            response = api_request("POST", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+
+    def shutdown_rootserver(self, id: int) -> APIResponse:
+        """Shuts down a Rootserver
+        
+        Args:
+            id: The id of the Rootserver
+        """
+        
+        endpoint = f"/vserver/{str(id)}/shutdown"
+
+        try:
+            response = api_request("POST", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+
+    def stop_rootserver(self, id: int) -> APIResponse:
+        """Stops a Rootserver
+        
+        Args:
+            id: The id of the Rootserver
+        """
+        
+        endpoint = f"/vserver/{str(id)}/stop"
+
+        try:
+            response = api_request("POST", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+
+    def restart_rootserver(self, id: int) -> APIResponse:
+        """Restarts a Rootserver
+        
+        Args:
+            id: The id of the Rootserver
+        """
+        
+        endpoint = f"/vserver/{str(id)}/restart"
+
+        try:
+            response = api_request("POST", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+        
+    def get_rootserver_backups(self, id: int) -> APIResponse:
+        """Get a list of all backups for a Rootserver
+        
+        Args:
+            id: The id of the Rootserver
+        """
+        
+        endpoint = f"/vserver/{str(id)}/backups"
+
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+
+    def create_rootserver_backup(self, id: int) -> APIResponse:
+        """Creates a new backup for a Rootserver
+        
+        Args:
+            id: The id of the Rootserver
+        """
+        
+        endpoint = f"/vserver/{str(id)}/backups"
+
+        try:
+            response = api_request("POST", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def restore_rootserver_backup(self, id: int, backup_id: int) -> APIResponse:
+        """Restores a Rootserver to an existing backup
+        
+        Args:
+            id: The id of the Rootserver
+            backup_id: The id of the Rootserver backup to restore
+        """
+        
+        endpoint = f"/vserver/{str(id)}/restore/{str(backup_id)}"
+
+        try:
+            response = api_request("POST", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def delete_rootserver_backup(self, id: int, backup_id: int) -> APIResponse:
+        """Deletes an existing Rootserver backup
+        
+        Args:
+            id: The id of the Rootserver
+            backup_id: The id of the Rootserver backup to delete
+        """
+        
+        endpoint = f"/vserver/{str(id)}/backup/{str(backup_id)}/delete"
+
+        try:
+            response = api_request("POST", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+        
+    def get_rootserver_vnc(self, id: int) -> APIResponse:
+        """Gets a URL to the VNC web access of a Rootserver
+        
+        Args:
+            id: The id of the Rootserver
+        """
+        
+        endpoint = f"/vserver/{str(id)}/vnc"
+
+        try:
+            response = api_request("GET", endpoint, auth=self.auth).json()
+        except (requests.RequestException) as e:
+            raise MCHost24APIError("Error during API request", endpoint) from e
+        
+        try:
+            response = APIResponse.from_dict(response)
+        except KeyError as e:
+            response = APIResponse.from_dict(fix_api_response(response))
+        
+        if response.status == APIResponseStatus.UNAUTHORIZED:
+            raise MCH24UnauthorizedError(endpoint=endpoint)
+        
+        if response.status == APIResponseStatus.ERROR:
+            raise MCHost24APIError("API raised error: " + response.message, endpoint)
+        
+        return response
+    
+    def get_rootserver_stats(self, id: int, tf: TimeFrame) -> APIResponse:
+        """Gets various Rootserver stats given the timeframe
+        
+        Args:
+            id: The id of the Rootserver
+            tf: The timeframe to get the data for
+        """
+        
+        endpoint = f"/vserver/{str(id)}/rrddata"
+        payload = {
+            "tf": tf.value
+        }
+        
+        # Try to perform request and decode JSON response. Don't yet work on the JSON response.
+        try:
+            response = api_request("GET", endpoint, json=payload, auth=self.auth).json()
         except (requests.RequestException) as e:
             raise MCHost24APIError("Error during API request", endpoint) from e
         
