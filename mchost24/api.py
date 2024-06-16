@@ -14,7 +14,7 @@ import pytimeparse2
 #   Constants
 #
 
-VERSION = "0.0.1"
+VERSION = "1.0.0"
 API_URL = "https://mc-host24.de/api/v1/"
 USER_AGENT = f"mchost-api-python/{VERSION}"
 
