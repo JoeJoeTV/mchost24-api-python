@@ -84,7 +84,6 @@ def api_request(method: str, endpoint: str, json: dict = None, auth: requests.au
     logging.debug("Request URL: " + url)
 
     response = requests.request(method, url, json=json, auth=auth, headers=headers, **kwargs)
-    logging.debug(pprint.pformat(response.json(), compact=True).replace("'",'"'))
     
     # TODO: Handle error messages for queries not found e.g. /domain/606060/info
     if response.status_code == 404:
