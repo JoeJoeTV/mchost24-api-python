@@ -1,0 +1,39 @@
+[build-system]
+requires = [
+    "setuptools >= 77.0.3"
+    ]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mchost24"
+version = "1.0.0"
+dependencies = [
+    "dataclasses_json >= 0.6.6",
+    "pytimeparse2 >= 1.7.1",
+    "requests >= 2.32.3",
+]
+authors = [
+  { name="JoeJoeTV", email="joejoetv@joejoetv.de" },
+]
+description = "A Python Module that allows interacting with the MC-Host24 REST API"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Topic :: Internet",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: System :: Networking",
+    "Topic :: Utilities",
+]
+license = "GPL-3.0"
+license-files = ["LICEN[CS]E*"]
+
+[project.urls]
+Homepage = "https://github.com/JoeJoeTV/mchost24-api-python"
+Issues = "https://github.com/JoeJoeTV/mchost24-api-python/issues"
